@@ -16,7 +16,7 @@
 #      Author: Juergen Hess, Adapted from Markiian Benovskyi
 
 import smbus2 as smbus
-
+import time as time
 
 class TB6612FNGCodes:
     GMD_I2C_ADDRESS = 0x14
@@ -206,10 +206,10 @@ class MotorDriverTB6612FNG:
 
 if __name__ == '__main__':
     motor = MotorDriverTB6612FNG()
-    #motor.dc_motor_stop(0)
-    #exit(0)
+    motor.dc_motor_stop(0)
+    exit(0)
     while True:
-        motor.dc_motor_run(0,50)
-        time.sleep(0.1)
-        motor.dc_motor_run(0,-50)
-        time.sleep(0.1)
+        motor.dc_motor_run(0,100)
+        time.sleep(0.4)
+        motor.dc_motor_run(0,-100)
+        time.sleep(0.4)
