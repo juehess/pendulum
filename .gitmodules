@@ -1,0 +1,6 @@
+[submodule "lib/sac"]
+	path = lib/sac
+	url = git@github.com:juehess/sac.git
+[submodule "lib/VL53L0X-python"]
+	path = lib/VL53L0X-python
+	url = git@github.com:juehess/VL53L0X-python.git
