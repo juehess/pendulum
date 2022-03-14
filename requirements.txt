@@ -1,0 +1,5 @@
+gym~=0.21.0
+numpy~=1.19.5
+smbus2~=0.4.1
+VL53L0X~=1.0.4
+setuptools~=57.0.0
