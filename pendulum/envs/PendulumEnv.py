@@ -1,7 +1,7 @@
 import gym
 from gym import spaces
 import numpy as np
-
+import math
 class PendulumEnv(gym.Env):
   """Custom Environment that follows gym interface"""
   metadata = {'render.modes': ['human']}
@@ -9,15 +9,28 @@ class PendulumEnv(gym.Env):
   def __init__(self, arg1, arg2, ...):
     super(PendulumEnv, self).__init__()
 
-    N_DISCRETE_ACTIONS = 510
-    # Define action and observation space
-    # They must be gym.spaces objects
-    # Example when using discrete actions:
-    self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS)
+    self.max_motor_cmd = 200
 
-    # Example for using image as input:
-    self.observation_space = spaces.Box(
-        low=np.array([0, 0]), high=np.array([3, 1]), dtype=np.float16)
+    # Angle limit set to 2 * theta_threshold_radians so failing observation
+    # is still within bounds.
+    high = np.array(
+      [
+        np.pi,
+        np.finfo(np.float32).max,
+        np.pi,
+        np.finfo(np.float32).max,
+      ],
+      dtype=np.float32,
+    )
+
+    # observation: cart position, cart velocity, pole angle, pole angular velocity
+    self.observation_space = spaces.Box(-high, high, dtype=np.float32)
+
+    self.action_space = spaces.Box(
+      low=-self.max_motor_cmd, high=self.max_motor_cmd, shape=(1,), dtype=np.int
+    )
+
+
 
   def step(self, action):
     # Execute one time step within the environment
