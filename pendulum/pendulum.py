@@ -1,3 +1,6 @@
+import numpy as np
+import threading
+
 from driver.AS5600 import AS5600
 from driver.motor import *
 from VL53L0X import *
@@ -6,6 +9,7 @@ import math
 #import numpy as np
 #from numpy_ringbuffer import RingBuffer
 from simple_pid import PID
+import time
 
 class Pendulum:
 
@@ -13,15 +17,15 @@ class Pendulum:
 
         #init motor
         self.motor = MotorDriverTB6612FNG()
-        print("finished init1")
+
         #init distance sensor
         self.sensor_dist = VL53L0X(i2c_bus=1,i2c_address=0x29)
         self.sensor_dist.open()
         self.sensor_dist.start_ranging(Vl53l0xAccuracyMode.BETTER)
-        print("finished init2")
+
         #init rotation sensor
         self.sensor_rot = AS5600()
-        print("finished init3")
+
         self.midPoint = 0
         self.zeroAngle = 0
         print("finished init4")
@@ -29,10 +33,13 @@ class Pendulum:
         self.midpointCalibrated = False
         self.angleCalibrated = False
         print("finished init5")
-        self.stateCartPosition = 0
-        self.stateCartVelocity = 0
-        self.statePendulumPosition = 0
-        self.statePendulumVelocity = 0
+
+        self.currRawAngle = 0.0
+        self.currRawPosition = 0.0
+        self.stateCartPosition = 0.0
+        self.stateCartVelocity = 0.0
+        self.statePendulumPosition = 0.0
+        self.statePendulumVelocity = 0.0
         #self.rbCartPosition = RingBuffer(capacity=5, dtype=np.float32)
         #self.rbPendulumPosition = RingBuffer(capacity=5, dtype=np.float32)
         print("finished init6")
@@ -41,7 +48,12 @@ class Pendulum:
         self.pid = PID (1.2, 0.05, 0.0, setpoint = self.midPoint, sample_time=0.05, output_limits=(-60,60))
         print("finished init7")
 
+        self.threadMeasure = threading.Timer(0.01, self.measure)
+        self.threadMeasure.start()
+
+
     def __del__(self):
+        self.threadMeasure.cancel()
 
         #stop motor
         self.motor.dc_motor_stop(0)
@@ -49,6 +61,13 @@ class Pendulum:
         #stop ranging
         self.sensor_dist.stop_ranging()
         self.sensor_dist.close()
+
+    def measure(self):
+        tmpAngle = self.sensor_rot.getAngleRadians()
+        tmpPosition = self.sensor_dist.get_distance()
+
+        self.currRawAngle = tmpAngle
+        self.currRawPosition = tmpPosition
 
     def computeState(self):
 
@@ -73,23 +92,29 @@ class Pendulum:
 
     def getPosition(self):
         '''Get pendulum position in distance from midpoint'''
-        res = self.sensor_dist.get_distance() - self.midPoint
+        res = self.currRawPosition - self.midPoint
         return res
 
     def getRotation(self):
         '''Get pendulum angular distance to zero point'''
-        angle_diff = self.sensor_rot.getAngleRadians() - self.zeroAngle
-        if angle_diff > math.pi/2.0:
-            angle_diff -= math.pi
-        elif angle_diff < -math.pi/2.0:
-            angle_diff += math.pi
-
+        angle_diff = normalize_angle(self.currRawAngle - self.zeroAngle)
         return angle_diff
 
     #def reset(self):
     ##    #go to middle of track
 #
 #        #wait until pendulum stands still
+    def waitUntilPendulumStopped(self):
+        moving = True
+        angle = 0
+        angle_threshold = np.radians(5) # set threshold to 5 degrees
+        while moving:
+            curr_angle = self.sensor_rot.getAngleRadians()
+            time.sleep(0.1)
+            if np.fabs(normalize_angle(curr_angle-angle)) < angle_threshold:
+                moving = False
+                self.zeroAngle = curr_angle
+            angle = curr_angle
 
     def calibrate(self):
         self.calibrateMidpoint()
@@ -115,8 +140,9 @@ class Pendulum:
         print("Calibrating Zero Angle")
         print("Waiting for pendulum to stand still")
         #self.reset()
+        self.waitUntilPendulumStopped()
         self.zeroAngle = self.sensor_rot.getAngleRadians()
-        self.calibrated = True
+        self.angleCalibrated = True
         print("Zero angle calibrated")
 
     def moveToMidPoint(self):
@@ -135,7 +161,10 @@ class Pendulum:
             print("Distance, Speed " + str(dist) + " " + str(speed))
             time.sleep(0.1)
 
+def normalize_angle(x):
+    return ((x + np.pi) % (2 * np.pi)) - np.pi
+
 if __name__ == '__main__':
 
     pendulum = Pendulum()
-    pendulum.moveToMidPoint()
+    pendulum.calibrate()
