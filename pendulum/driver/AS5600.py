@@ -26,8 +26,13 @@ class AS5600:
     _mag_lo = 0x1c
     _burn = 0xff
 
+    _raw_offset = 0
+
     def __init__(self):
         self.bus = smbus.SMBus(1)
+
+    def setOffset(self, offset):
+        self._raw_offset = offset
 
     def rawAngleToDegrees(self,rawAngle):
         #Raw data reports 0 - 4095 segments, which is 0.087 of a degree
@@ -54,8 +59,14 @@ class AS5600:
     def getAngleDegrees(self):
         return self.rawAngleToDegrees(self.getRawAngle())
 
-    def getAngleRadians(self):
-        return self.rawAngleToRadians(self.getRawAngle())
+    def getCorrAngleRadians(self):
+        corr_raw_angle = (self.getRawAngle() + offset) % 4095
+        return self.rawAngleToRadians(corr_raw_angle)
+
+    def getCorrAngleDegrees(self):
+        corr_raw_angle = (self.getRawAngle() + offset) % 4095
+        return self.rawAngleToDegrees(corr_raw_angle)
+
 
     def getMaxAngle(self):
         return self.readTwoBytes(self._mang_hi)
@@ -104,7 +115,7 @@ class AS5600:
 
     def setMaxAngle(self, maxAngle=-1):
 
-        if (endAngle == -1):
+        if (maxAngle == -1):
             _rawMaxAngle = self.getRawAngle();
         else:
             _rawMaxAngle = maxAngle;
@@ -127,8 +138,10 @@ class AS5600:
 
         print(bin(magStatus))
         if (magStatus & 0x20):
-          retVal = 1
+            retVal = 1
 
+        if retVal: print("Magnet detected")
+        else: print("Magnet not detected")
         return retVal;
 
     def getMagnetStrength(self):
@@ -144,10 +157,13 @@ class AS5600:
         print(bin(magStatus))
         if (magStatus & 0x20):
             retVal = 2
+            print("Magnet strength ok")
             if (magStatus & 0x10):
                 retVal = 1 #too weak
+                print("Magnet too weak")
             elif (magStatus & 0x08):
                 retVal = 3 #to strong
+                print("Magnet too strong")
         return retVal
 
 
@@ -155,7 +171,7 @@ class AS5600:
 if __name__ == '__main__':
     
     sensor = AS5600()
-#    while True:
+
     print(sensor.getRawAngle())
     print(sensor.getMaxAngle())
     print(sensor.getScaledAngle())
@@ -164,9 +180,15 @@ if __name__ == '__main__':
     print(sensor.getMagnetStrength())
     #print(sensor.setStartPosition())
     print(sensor.getStartPosition())
-    print(sensor.getAngleDegrees())
-    print(sensor.getAngleRadians())
-    
+
+    offset = 4095 - sensor.getRawAngle()
+    sensor.setOffset(offset)
+    while True:
+        print("raw",sensor.getRawAngle())
+        #print("raw",sensor.getAngleDegrees())
+        print("cor",sensor.getCorrAngleDegrees())
+        #print(sensor.getAngleRadians())
+
 
 
     

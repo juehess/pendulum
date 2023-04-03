@@ -1,3 +1,5 @@
+import time
+
 from driver.AS5600 import AS5600
 from driver.motor import *
 from VL53L0X import *
@@ -29,16 +31,18 @@ class Pendulum:
         self.midpointCalibrated = False
         self.angleCalibrated = False
         print("finished init5")
-        self.stateCartPosition = 0
-        self.stateCartVelocity = 0
-        self.statePendulumPosition = 0
-        self.statePendulumVelocity = 0
+        self.stateCartPosition = 0.0
+        self.stateCartVelocity = 0.0
+        self.statePendulumPosition = 0.0
+        self.statePendulumVelocity = 0.0
+        self.max_motor_command = 255.0
         #self.rbCartPosition = RingBuffer(capacity=5, dtype=np.float32)
         #self.rbPendulumPosition = RingBuffer(capacity=5, dtype=np.float32)
         print("finished init6")
         #init PID controller for moving pendulum to middle point
-        self.midPoint = 280
-        self.pid = PID (1.2, 0.05, 0.0, setpoint = self.midPoint, sample_time=0.05, output_limits=(-60,60))
+        self.midPoint = 250
+        self.midPoint_offset = 30.0 #offset of middle of mount to the reflector
+        self.pid = PID (1.3, 0.01, 0.0, setpoint = self.midPoint, sample_time=0.05, output_limits=(-120,120))
         print("finished init7")
 
     def __del__(self):
@@ -69,7 +73,8 @@ class Pendulum:
             speed = 200
             print("Motor speed set too high " + str(speed))
         else:
-            return self.motor.dc_motor_run(0, speed)
+            self.motor.dc_motor_run(0, speed)
+            return
 
     def getPosition(self):
         '''Get pendulum position in distance from midpoint'''
@@ -77,19 +82,22 @@ class Pendulum:
         return res
 
     def getRotation(self):
-        '''Get pendulum angular distance to zero point'''
-        angle_diff = self.sensor_rot.getAngleRadians() - self.zeroAngle
-        if angle_diff > math.pi/2.0:
-            angle_diff -= math.pi
-        elif angle_diff < -math.pi/2.0:
-            angle_diff += math.pi
+        angle_diff = self.sensor_rot.getCorrAngleRadians()
+
+        # - self.zeroAngle
+        # if angle_diff > math.pi/2.0:
+        #     angle_diff -= math.pi
+        # elif angle_diff < -math.pi/2.0:
+        #     angle_diff += math.pi
 
         return angle_diff
 
-    #def reset(self):
-    ##    #go to middle of track
-#
-#        #wait until pendulum stands still
+    def reset(self):
+        if not self.calibrated:
+            self.calibrate()
+        #go to middle of track
+        self.moveToMidPoint()
+        #TODO: wait until pendulum is still
 
     def calibrate(self):
         self.calibrateMidpoint()
@@ -99,15 +107,17 @@ class Pendulum:
     def calibrateMidpoint(self):
         '''calibrate the point where pendulum is in middle of the track'''
 
-        self.setSpeed(60)
-        time.sleep(5)
+        self.setSpeed(70)
+        time.sleep(6)
         max_dist=self.sensor_dist.get_distance()
+        print("max dist ", max_dist)
 
-        self.setSpeed(-60)
-        time.sleep(5)
+        self.setSpeed(-70)
+        time.sleep(6)
         min_dist=self.sensor_dist.get_distance()
+        print("min dist ", max_dist)
 
-        self.midPoint=max_dist-min_dist
+        self.midPoint=(max_dist+min_dist)/2.0-30.0
         self.midpointCalibrated = True
 
     def calibrateZeroAngle(self):
@@ -115,9 +125,24 @@ class Pendulum:
         print("Calibrating Zero Angle")
         print("Waiting for pendulum to stand still")
         #self.reset()
-        self.zeroAngle = self.sensor_rot.getAngleRadians()
-        self.calibrated = True
+        prev_angle = self.sensor_rot.getRawAngle()
+        while not self.calibrated:
+            time.sleep(0.5)
+            # print(sensor.getAngleDegrees())
+            # print(sensor.getAngleRadians())
+            curr_angle = self.sensor_rot.getRawAngle()
+            if prev_angle == curr_angle:
+                offset = 4095 - curr_angle
+                self.sensor_rot.setOffset(offset)
+                print("Found angle offset", offset)
+                self.calibrated = True
+            else:
+                prev_angle = curr_angle
+
         print("Zero angle calibrated")
+
+    def isCalibrated(self):
+        return self.calibrated
 
     def moveToMidPoint(self):
 
@@ -125,17 +150,24 @@ class Pendulum:
 
         while not goalReached:
             dist = self.sensor_dist.get_distance()
+            if abs(dist - self.midPoint) < 5:
+                self.motor.dc_motor_stop(0)
+                return
             speed = self.pid(dist)
-            print(speed)
-            if speed < 0 and speed >  -30:
-                speed = -30
-            elif speed > 0 and speed < 30:
-                speed = 30
+            if speed < 0 and speed >  -60:
+                speed = -60
+            elif speed < 0 and speed >  -60:
+                speed = -60
+            elif speed > 0 and speed > 60:
+                speed = 60
+            elif speed > 0 and speed < 60:
+                speed = 60
+
             self.setSpeed(speed)
-            print("Distance, Speed " + str(dist) + " " + str(speed))
-            time.sleep(0.1)
+            time.sleep(0.01)
 
 if __name__ == '__main__':
 
     pendulum = Pendulum()
+    pendulum.calibrateMidpoint()
     pendulum.moveToMidPoint()

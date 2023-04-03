@@ -207,9 +207,14 @@ class MotorDriverTB6612FNG:
 if __name__ == '__main__':
     motor = MotorDriverTB6612FNG()
     motor.dc_motor_stop(0)
-    exit(0)
+
     while True:
-        motor.dc_motor_run(0,100)
-        time.sleep(0.4)
-        motor.dc_motor_run(0,-100)
-        time.sleep(0.4)
+        print('next loop')
+        motor.dc_motor_run(0,-60)
+        time.sleep(0.5)
+        motor.dc_motor_stop(0)
+        motor.dc_motor_run(0,60)
+        time.sleep(0.5)
+        motor.dc_motor_stop(0)
+        #time.sleep(0.4)
+

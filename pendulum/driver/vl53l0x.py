@@ -31,8 +31,11 @@ tof = VL53L0X.VL53L0X(i2c_bus=1,i2c_address=0x29)
 # tof.change_address(0x32)
 tof.open()
 # Start ranging
+print('test')
+#tof.start_ranging()
 tof.start_ranging(VL53L0X.Vl53l0xAccuracyMode.BETTER)
 
+print('test')
 timing = tof.get_timing()
 if timing < 20000:
     timing = 20000
